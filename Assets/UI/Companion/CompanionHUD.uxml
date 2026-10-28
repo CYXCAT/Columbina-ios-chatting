@@ -1,0 +1,77 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="CompanionHUD.uss" />
+    <ui:VisualElement name="hud" class="hud" picking-mode="Ignore">
+        <ui:VisualElement name="dialogue" class="dialogue" picking-mode="Ignore">
+            <ui:Label name="userLine" class="user-line" picking-mode="Ignore" />
+            <ui:VisualElement name="reply" class="reply" picking-mode="Ignore">
+                <ui:Label name="replyName" class="reply__name" picking-mode="Ignore" />
+                <ui:Label name="replyText" class="reply__text" picking-mode="Ignore" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="bottomBar" class="bottom-bar" picking-mode="Ignore">
+            <ui:VisualElement name="controls" class="controls" picking-mode="Ignore">
+                <ui:Button name="keyboardButton" class="glass icon-button">
+                    <ui:VisualElement class="icon icon--keyboard" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:Button name="voiceButton" class="voice-button">
+                    <ui:VisualElement class="icon icon--mic" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:VisualElement class="side-spacer" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:VisualElement name="inputBar" class="glass input-bar">
+                <ui:Button name="voiceModeButton" class="icon-button">
+                    <ui:VisualElement class="icon icon--mic" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:TextField name="chatInput" class="chat-input" placeholder-text="Say something…" hide-placeholder-on-focus="false" max-length="200" />
+                <ui:Button name="sendButton" class="send-button send-button--idle">
+                    <ui:VisualElement class="icon icon--send" picking-mode="Ignore" />
+                </ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="topBar" class="top-bar" picking-mode="Ignore">
+            <ui:Button name="menuButton" class="glass icon-button">
+                <ui:VisualElement class="icon icon--menu" picking-mode="Ignore" />
+            </ui:Button>
+        </ui:VisualElement>
+        <ui:VisualElement name="scrim" class="scrim" />
+        <ui:VisualElement name="menu" class="glass menu">
+            <ui:Button name="menuMotion" class="menu-item">
+                <ui:VisualElement class="icon icon--motion" picking-mode="Ignore" />
+                <ui:Label name="menuMotionLabel" text="Change pose" class="menu-item__label" picking-mode="Ignore" />
+            </ui:Button>
+            <ui:Button name="menuClear" class="menu-item">
+                <ui:VisualElement class="icon icon--clear" picking-mode="Ignore" />
+                <ui:Label name="menuClearLabel" text="Clear chat" class="menu-item__label" picking-mode="Ignore" />
+            </ui:Button>
+            <ui:VisualElement class="menu-divider" picking-mode="Ignore" />
+            <ui:Button name="menuSettings" class="menu-item">
+                <ui:VisualElement class="icon icon--settings" picking-mode="Ignore" />
+                <ui:Label name="menuSettingsLabel" text="Settings" class="menu-item__label" picking-mode="Ignore" />
+            </ui:Button>
+            <ui:Button name="menuAbout" class="menu-item">
+                <ui:VisualElement class="icon icon--info" picking-mode="Ignore" />
+                <ui:Label name="menuAboutLabel" text="About" class="menu-item__label" picking-mode="Ignore" />
+            </ui:Button>
+        </ui:VisualElement>
+        <ui:VisualElement name="settingsLayer" class="modal-layer">
+            <ui:VisualElement name="settingsBackdrop" class="modal-backdrop" />
+            <ui:VisualElement name="settingsCard" class="glass modal-card">
+                <ui:Label name="settingsTitle" text="Settings" class="modal-card__title" picking-mode="Ignore" />
+                <ui:Label name="settingsLanguageLabel" text="Language" class="field-label" picking-mode="Ignore" />
+                <ui:VisualElement class="segmented" picking-mode="Ignore">
+                    <ui:Button name="languageEnglish" text="English" class="segmented__option" />
+                    <ui:Button name="languageChinese" text="中文" class="segmented__option" />
+                </ui:VisualElement>
+                <ui:Button name="settingsDone" text="Done" class="primary-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="signinLayer" class="signin-layer">
+            <ui:Label name="signinTitle" text="Welcome" class="signin__title" picking-mode="Ignore" />
+            <ui:Button name="signinApple" text="Continue with Apple" class="signin__button signin__button--apple" />
+            <ui:Button name="signinGoogle" text="Continue with Google" class="signin__button" />
+        </ui:VisualElement>
+        <ui:VisualElement class="toast-layer" picking-mode="Ignore">
+            <ui:Label name="toast" class="toast" picking-mode="Ignore" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
