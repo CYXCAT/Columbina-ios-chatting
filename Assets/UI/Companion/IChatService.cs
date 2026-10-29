@@ -18,6 +18,8 @@ namespace Companion
         // Leaves the conversation and releases its server-side resources; ConnectAsync starts a new one.
         Awaitable DisconnectAsync();
         Awaitable SendAsync(string message);
+        // Interrupts the reply in progress (text and voice).
+        void Cancel();
         void Reset();
     }
 }

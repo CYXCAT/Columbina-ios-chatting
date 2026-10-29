@@ -15,7 +15,6 @@ namespace Companion
         [SerializeField] VoiceLipSync lipSync;
 
         CompanionApi api;
-        bool paused;
 
         public IChatService Chat { get; private set; }
         public event Action<IChatService> ChatReady;
@@ -75,8 +74,17 @@ namespace Companion
         {
             // A fresh install adopts the language stored on the account.
             if (!L.HasSavedPreference && api.User?.language == "zh") L.Current = Language.Chinese;
-            var chat = new AgoraChatService(api);
-            await UseChat(chat);
+            await UseChat(new HttpChatService(api, VoicePlayer()));
+        }
+
+        StreamingVoicePlayer VoicePlayer()
+        {
+            var player = voiceOutput.GetComponent<StreamingVoicePlayer>();
+            if (player != null) return player;
+            player = voiceOutput.gameObject.AddComponent<StreamingVoicePlayer>();
+            // uLipSync's proxy must come after the player on the AudioSource's object.
+            if (lipSync != null) lipSync.Attach(voiceOutput);
+            return player;
         }
 
         async Awaitable UseChat(IChatService chat)
@@ -92,13 +100,6 @@ namespace Companion
             try
             {
                 await Chat.ConnectAsync(L.Code);
-                // The app went to the background while connecting: don't keep the agent running.
-                if (paused)
-                {
-                    await Chat.DisconnectAsync();
-                    return;
-                }
-                WireAgentLipSync();
             }
             catch (Exception e)
             {
@@ -107,29 +108,18 @@ namespace Companion
             }
         }
 
-        void WireAgentLipSync()
-        {
-            if (Chat is not AgoraChatService agora) return;
-            if (lipSync?.LipSync == null) return;
-            var bridge = gameObject.GetComponent<AgoraLipSyncBridge>()
-                ?? gameObject.AddComponent<AgoraLipSyncBridge>();
-            bridge.Attach(agora.Rtc, agora.AgentUid, lipSync.LipSync);
-        }
-
         async void OnLanguageChanged()
         {
             if (Chat != null) await Connect();
         }
 
-        // ConvoAI bills while the agent is in the channel, so leave it in the background and start a
-        // fresh session when the app returns.
+        // Stop talking in the background; retry a connection that failed earlier when the app returns.
         async void OnApplicationPause(bool pause)
         {
-            paused = pause;
             if (Chat == null) return;
             try
             {
-                if (pause) await Chat.DisconnectAsync();
+                if (pause) Chat.Cancel();
                 else if (!Chat.IsConnected) await Connect();
             }
             catch (Exception e)

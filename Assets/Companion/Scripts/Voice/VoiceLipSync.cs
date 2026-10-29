@@ -3,9 +3,8 @@ using UnityEngine;
 namespace Companion
 {
     // Feeds the agent's voice to uLipSync (uLipSync + uLipSyncBlendShape on the character).
-    // LiveKit's AudioStream writes the audio in its AudioProbe's OnAudioFilterRead, so the
-    // uLipSyncAudioSource proxy must sit after that probe in the filter chain: Attach() is called
-    // each time a new stream is created and re-adds the proxy as the last component.
+    // The uLipSyncAudioSource proxy reads the AudioSource's output in OnAudioFilterRead, so Attach()
+    // re-adds it as the last component, after StreamingVoicePlayer.
     public class VoiceLipSync : MonoBehaviour
     {
         [SerializeField] uLipSync.uLipSync lipSync;

@@ -24,6 +24,8 @@ namespace Companion
             ["toast.cleared"] = ("Chat cleared", "对话已清空"),
             ["toast.about"] = ("Immersive companion demo", "沉浸式陪伴 Demo"),
             ["toast.voiceUnavailable"] = ("Voice input is available on iOS", "语音输入仅在 iOS 上可用"),
+            ["toast.voicePermission"] = ("Allow microphone and speech recognition in Settings", "请在系统设置中允许麦克风和语音识别"),
+            ["toast.voiceFailed"] = ("Didn't catch that, please try again", "没听清，请再说一次"),
             ["toast.offline"] = ("Can't reach her right now", "暂时连接不上她"),
             ["voice.hold"] = ("Hold to talk", "按住说话"),
             ["signin.title"] = ("Welcome", "欢迎"),

@@ -83,6 +83,7 @@ namespace Companion
 
         void OnDisable()
         {
+            StopRecording();
             L.LanguageChanged -= OnLanguageChanged;
             speech.Partial -= OnSpeechPartial;
             speech.Final -= OnSpeechFinal;
@@ -97,6 +98,11 @@ namespace Companion
         }
 
         void OnDestroy() => speech.Dispose();
+
+        void OnApplicationPause(bool pause)
+        {
+            if (pause) StopRecording();
+        }
 
         // ---------- chat ----------
 
@@ -130,6 +136,7 @@ namespace Companion
         {
             if (chat == null || !chat.IsConnected)
             {
+                userLine.RemoveFromClassList("user-line--visible");
                 ShowToast(L.Get("toast.offline"));
                 return;
             }
@@ -252,7 +259,10 @@ namespace Companion
                 ShowToast(L.Get("toast.voiceUnavailable"));
                 return;
             }
-            if (waiting) return;
+            // Talking interrupts her, whether she is still thinking or already speaking.
+            chat?.Cancel();
+            SetWaiting(false);
+            reply.RemoveFromClassList("reply--visible");
             voicePointer = e.pointerId;
             voiceButton.CapturePointer(voicePointer);
             recording = true;
@@ -285,6 +295,7 @@ namespace Companion
         {
             Debug.LogWarning("Speech recognition: " + message);
             userLine.RemoveFromClassList("user-line--visible");
+            ShowToast(L.Get(message == "permission denied" ? "toast.voicePermission" : "toast.voiceFailed"));
         }
 
         // ---------- menu / settings / sign-in ----------

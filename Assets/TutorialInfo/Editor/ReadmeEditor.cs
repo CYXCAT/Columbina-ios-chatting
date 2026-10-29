@@ -1,7 +1,6 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System.IO;
-using Unity.Scripting.LifecycleManagement;
 using UnityEngine.UIElements;
 
 [CustomEditor(typeof(Readme))]
@@ -10,7 +9,7 @@ sealed partial class ReadmeEditor : Editor
     const string k_ShowedReadmeSessionStateName = "ReadmeEditor.showedReadme";
     const string k_ReadmeSourceDirectory = "Assets/TutorialInfo";
 
-    [OnCodeLoaded]
+    [InitializeOnLoadMethod]
     static void OnCodeLoaded()
         => EditorApplication.delayCall += SelectReadmeAutomatically;
 

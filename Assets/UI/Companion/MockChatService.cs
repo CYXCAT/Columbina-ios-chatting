@@ -97,6 +97,8 @@ namespace Companion
             return fallback[turn % fallback.Length];
         }
 
+        public void Cancel() => generation++;
+
         public void Reset()
         {
             turn = 0;

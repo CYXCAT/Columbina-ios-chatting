@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -7,18 +8,6 @@ namespace Companion
 {
     [Serializable] public class ApiUser { public string id; public string name; public string language; }
     [Serializable] public class AuthResponse { public string accessToken; public string refreshToken; public int expiresIn; public ApiUser user; }
-    [Serializable] public class AgoraSessionResponse
-    {
-        public string appId;
-        public string channel;
-        public uint uid;
-        public uint agentUid;
-        public string agentId;
-        public string rtcToken;
-        public string rtmToken;
-        public long expiresAt;
-        public string sessionToken;
-    }
 
     public class ApiException : Exception
     {
@@ -43,8 +32,6 @@ namespace Companion
         [Serializable] class IdTokenBody { public string idToken; public string nonce; public string name; }
         [Serializable] class RefreshBody { public string refreshToken; }
         [Serializable] class LanguageBody { public string language; }
-        [Serializable] class AgoraMessageBody { public string sessionToken; public string text; }
-        [Serializable] class AgoraStopBody { public string sessionToken; }
 
         public Awaitable SignInDevAsync(string name) => Authenticate("/api/auth/dev", new DevLoginBody { name = name });
 
@@ -80,14 +67,18 @@ namespace Companion
         }
 
         // ---- app
-        public Awaitable<AgoraSessionResponse> StartAgoraSessionAsync() =>
-            Authorized<AgoraSessionResponse>("POST", "/api/agora/session", null);
-
-        public async Awaitable SendAgoraMessageAsync(string sessionToken, string text) =>
-            await Authorized<EmptyResponse>("POST", "/api/agora/message", new AgoraMessageBody { sessionToken = sessionToken, text = text });
-
-        public async Awaitable StopAgoraSessionAsync(string sessionToken) =>
-            await Authorized<EmptyResponse>("POST", "/api/agora/stop", new AgoraStopBody { sessionToken = sessionToken });
+        // Streams /api/chat: onLine gets each NDJSON event line on the main thread as it arrives.
+        // Cancelling aborts the request, which also stops generation on the server.
+        public async Awaitable ChatStreamAsync(object body, Action<string> onLine, CancellationToken cancel)
+        {
+            if (string.IsNullOrEmpty(accessToken)) await RefreshAsync();
+            try { await Stream("/api/chat", body, onLine, cancel); }
+            catch (ApiException e) when (e.Status == 401)
+            {
+                await RefreshAsync();
+                await Stream("/api/chat", body, onLine, cancel);
+            }
+        }
 
         public async Awaitable SetLanguageAsync(string language)
         {
@@ -104,8 +95,6 @@ namespace Companion
                 return await Send<T>(method, path, body, true);
             }
         }
-
-        [Serializable] class EmptyResponse { }
 
         async Awaitable<T> Send<T>(string method, string path, object body, bool authed)
         {
@@ -124,6 +113,72 @@ namespace Companion
             if (req.result != UnityWebRequest.Result.Success)
                 throw new ApiException(req.responseCode, $"{method} {path} failed: {req.responseCode} {req.error} {req.downloadHandler.text}");
             return JsonUtility.FromJson<T>(req.downloadHandler.text);
+        }
+
+        async Awaitable Stream(string path, object body, Action<string> onLine, CancellationToken cancel)
+        {
+            using var req = new UnityWebRequest(baseUrl + path, "POST");
+            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(JsonUtility.ToJson(body)));
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + accessToken);
+            var lines = new LineDownloadHandler(req, onLine);
+            req.downloadHandler = lines;
+            req.timeout = 90;
+            using var abort = cancel.Register(req.Abort);
+
+            await req.SendWebRequest();
+
+            cancel.ThrowIfCancellationRequested();
+            if (req.result != UnityWebRequest.Result.Success)
+                throw new ApiException(req.responseCode, $"POST {path} failed: {req.responseCode} {req.error} {lines.ErrorText}");
+            lines.Flush();
+        }
+
+        // Splits a streamed response into lines as bytes arrive. Error responses are collected instead.
+        sealed class LineDownloadHandler : DownloadHandlerScript
+        {
+            readonly UnityWebRequest req;
+            readonly Action<string> onLine;
+            readonly Decoder utf8 = Encoding.UTF8.GetDecoder();
+            readonly StringBuilder line = new(), errorBody = new();
+            char[] chars = new char[16384];
+
+            public LineDownloadHandler(UnityWebRequest req, Action<string> onLine) : base(new byte[16384])
+            {
+                this.req = req;
+                this.onLine = onLine;
+            }
+
+            public string ErrorText => errorBody.ToString();
+
+            protected override bool ReceiveData(byte[] data, int dataLength)
+            {
+                int n = utf8.GetCharCount(data, 0, dataLength);
+                if (chars.Length < n) chars = new char[n];
+                n = utf8.GetChars(data, 0, dataLength, chars, 0);
+                if (req.responseCode >= 400)
+                {
+                    errorBody.Append(chars, 0, n);
+                    return true;
+                }
+                for (int i = 0; i < n; i++)
+                {
+                    if (chars[i] == '\n') Emit();
+                    else line.Append(chars[i]);
+                }
+                return true;
+            }
+
+            public void Flush() => Emit();
+
+            void Emit()
+            {
+                var text = line.ToString().Trim();
+                line.Clear();
+                if (text.Length == 0) return;
+                try { onLine(text); }
+                catch (Exception e) { Debug.LogException(e); }
+            }
         }
     }
 }

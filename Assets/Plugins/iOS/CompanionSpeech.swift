@@ -21,27 +21,48 @@ import Speech
     // SpeechAnalyzer path (typed as Any so the class still loads on iOS < 26)
     private var analyzerSession: Any?
 
+    // Bumped by every start(): results from an older, abandoned session are dropped.
+    private var generation = 0
+    // Setup is asynchronous (permission prompt, model download), so the user can let go before
+    // recognition is running; setup then finishes the session itself instead of leaving the mic on.
+    private var stopRequested = false
+
     @objc public func start(locale: String,
                             onPartial: @escaping TextHandler,
                             onFinal: @escaping TextHandler,
                             onError: @escaping TextHandler) {
-        self.onPartial = { t in DispatchQueue.main.async { onPartial(t) } }
-        self.onFinal = { t in DispatchQueue.main.async { onFinal(t) } }
-        self.onError = { t in DispatchQueue.main.async { onError(t) } }
+        stop()
+        legacyTask?.cancel()
+        legacyTask = nil
+        generation += 1
+        stopRequested = false
+        let gen = generation
+        let isCurrent = { [weak self] in self?.generation == gen }
+        self.onPartial = { t in DispatchQueue.main.async { if isCurrent() { onPartial(t) } } }
+        self.onFinal = { t in DispatchQueue.main.async { if isCurrent() { onFinal(t) } } }
+        self.onError = { t in DispatchQueue.main.async { if isCurrent() { onError(t) } } }
 
-        Task {
+        Task { @MainActor in
             guard await Self.requestPermissions() else {
                 self.onError("permission denied")
                 return
             }
+            guard isCurrent() else { return }
             do {
                 try Self.configureAudioSession()
                 if #available(iOS 26.0, *) {
-                    try await self.startAnalyzer(locale: Locale(identifier: locale))
+                    let session = try await self.startAnalyzer(locale: Locale(identifier: locale))
+                    guard isCurrent() else {
+                        await session.finish()
+                        return
+                    }
+                    self.analyzerSession = session
                 } else {
                     try self.startLegacy(locale: Locale(identifier: locale))
                 }
+                if self.stopRequested { self.stop() }
             } catch {
+                guard isCurrent() else { return }
                 self.teardownEngine()
                 self.onError(error.localizedDescription)
             }
@@ -49,6 +70,7 @@ import Speech
     }
 
     @objc public func stop() {
+        stopRequested = true
         if #available(iOS 26.0, *), let session = analyzerSession as? AnalyzerSession {
             analyzerSession = nil
             teardownEngine()
@@ -57,14 +79,16 @@ import Speech
         }
         teardownEngine()
         legacyRequest?.endAudio()
+        legacyRequest = nil
     }
 
     // MARK: - Audio
 
     private static func configureAudioSession() throws {
         let s = AVAudioSession.sharedInstance()
-        // voiceChat enables echo cancellation; the agent's TTS keeps playing through the speaker.
-        try s.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        // Her voice is interrupted while the user talks, so no echo cancellation is needed; .voiceChat
+        // would also duck Unity's playback volume for the rest of the session.
+        try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try s.setActive(true)
     }
 
@@ -110,7 +134,7 @@ import Speech
     }
 
     @available(iOS 26.0, *)
-    private func startAnalyzer(locale requested: Locale) async throws {
+    private func startAnalyzer(locale requested: Locale) async throws -> AnalyzerSession {
         guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
             throw NSError(domain: "CompanionSpeech", code: 1, userInfo: [NSLocalizedDescriptionKey: "unsupported locale"])
         }
@@ -162,7 +186,7 @@ import Speech
         engine.prepare()
         try engine.start()
         try await analyzer.start(inputSequence: stream)
-        analyzerSession = AnalyzerSession(analyzer: analyzer, input: continuation, results: results)
+        return AnalyzerSession(analyzer: analyzer, input: continuation, results: results)
     }
 
     // MARK: - iOS < 26: SFSpeechRecognizer
