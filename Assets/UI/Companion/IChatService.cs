@@ -15,6 +15,8 @@ namespace Companion
 
         bool IsConnected { get; }
         Awaitable ConnectAsync(string language);
+        // Leaves the conversation and releases its server-side resources; ConnectAsync starts a new one.
+        Awaitable DisconnectAsync();
         Awaitable SendAsync(string message);
         void Reset();
     }

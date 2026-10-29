@@ -15,6 +15,7 @@ namespace Companion
         [SerializeField] VoiceLipSync lipSync;
 
         CompanionApi api;
+        bool paused;
 
         public IChatService Chat { get; private set; }
         public event Action<IChatService> ChatReady;
@@ -91,6 +92,12 @@ namespace Companion
             try
             {
                 await Chat.ConnectAsync(L.Code);
+                // The app went to the background while connecting: don't keep the agent running.
+                if (paused)
+                {
+                    await Chat.DisconnectAsync();
+                    return;
+                }
                 WireAgentLipSync();
             }
             catch (Exception e)
@@ -112,6 +119,23 @@ namespace Companion
         async void OnLanguageChanged()
         {
             if (Chat != null) await Connect();
+        }
+
+        // ConvoAI bills while the agent is in the channel, so leave it in the background and start a
+        // fresh session when the app returns.
+        async void OnApplicationPause(bool pause)
+        {
+            paused = pause;
+            if (Chat == null) return;
+            try
+            {
+                if (pause) await Chat.DisconnectAsync();
+                else if (!Chat.IsConnected) await Connect();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
 
         void OnDestroy()

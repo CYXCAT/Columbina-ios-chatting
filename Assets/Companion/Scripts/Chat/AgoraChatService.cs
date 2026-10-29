@@ -138,7 +138,9 @@ namespace Companion
             }
         }
 
-        async Awaitable DisconnectAsync()
+        // Leaves the channel first (synchronous, so it happens even if the app is suspended right after),
+        // then asks the backend to stop the ConvoAI agent so it stops billing.
+        public async Awaitable DisconnectAsync()
         {
             var oldSession = session;
             Disconnect();

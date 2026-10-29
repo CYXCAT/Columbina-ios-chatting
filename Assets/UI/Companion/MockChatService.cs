@@ -64,6 +64,12 @@ namespace Companion
             return Done();
         }
 
+        public Awaitable DisconnectAsync()
+        {
+            generation++;
+            return Done();
+        }
+
         public async Awaitable SendAsync(string message)
         {
             int gen = generation;
