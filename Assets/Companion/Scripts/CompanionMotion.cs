@@ -47,12 +47,22 @@ namespace Companion
 
         void Bind(IChatService service)
         {
-            if (chat != null) chat.ReplyUpdated -= OnReply;
+            if (chat != null)
+            {
+                chat.ReplyUpdated -= OnReply;
+                chat.AgentVoiceVolume -= OnAgentVolume;
+            }
             chat = service;
-            if (chat != null) chat.ReplyUpdated += OnReply;
+            if (chat != null)
+            {
+                chat.ReplyUpdated += OnReply;
+                chat.AgentVoiceVolume += OnAgentVolume;
+            }
         }
 
         void OnReply(string _) => lastSpeech = Time.time;
+
+        void OnAgentVolume(float vol) { if (vol > voiceThreshold) lastSpeech = Time.time; }
 
         // User input (typing, sending, push-to-talk) postpones and interrupts idles.
         public void NotifyActivity()

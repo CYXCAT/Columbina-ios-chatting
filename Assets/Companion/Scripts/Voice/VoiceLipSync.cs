@@ -10,6 +10,8 @@ namespace Companion
     {
         [SerializeField] uLipSync.uLipSync lipSync;
 
+        public uLipSync.uLipSync LipSync => lipSync;
+
         public void Attach(AudioSource voice)
         {
             if (lipSync == null || voice == null) return;

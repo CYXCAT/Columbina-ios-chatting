@@ -7,8 +7,8 @@ using UnityEngine;
 
 namespace Companion.EditorTools
 {
-    // Xcode project setup for the companion app: permissions, Sign in with Apple, the GoogleSignIn
-    // Swift package + its Info.plist keys, Swift plugins, and native voice frameworks.
+    // Xcode project setup for the companion app: permissions, GoogleSignIn Swift package,
+    // Info.plist keys, Swift plugins, native voice frameworks, and entitlement cleanup.
     public static class IOSPostBuild
     {
         const string GoogleSignInPackage = "https://github.com/google/GoogleSignIn-iOS.git";
@@ -60,10 +60,15 @@ namespace Companion.EditorTools
             }
             plist.WriteToFile(plistPath);
 
-            var entitlements = Path.GetFileName(PlayerSettings.productName) + ".entitlements";
-            var caps = new ProjectCapabilityManager(projPath, entitlements, null, main);
-            caps.AddSignInWithApple();
-            caps.WriteToFile();
+            // Personal teams don't support Sign In with Apple; strip the capability so provisioning works.
+            var entitlementsPath = Path.Combine(path, Path.GetFileName(PlayerSettings.productName) + ".entitlements");
+            if (File.Exists(entitlementsPath))
+            {
+                var ent = new PlistDocument();
+                ent.ReadFromFile(entitlementsPath);
+                ent.root.values.Remove("com.apple.developer.applesignin");
+                ent.WriteToFile(entitlementsPath);
+            }
         }
 
         static CompanionConfig LoadConfig()

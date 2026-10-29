@@ -72,7 +72,14 @@ import Speech
         let speech = await withCheckedContinuation { c in
             SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) }
         }
-        let mic = await AVAudioApplication.requestRecordPermission()
+        let mic: Bool
+        if #available(iOS 17.0, *) {
+            mic = await AVAudioApplication.requestRecordPermission()
+        } else {
+            mic = await withCheckedContinuation { c in
+                AVAudioSession.sharedInstance().requestRecordPermission { c.resume(returning: $0) }
+            }
+        }
         return speech && mic
     }
 
@@ -116,7 +123,6 @@ import Speech
         guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber], considering: inputFormat) else {
             throw NSError(domain: "CompanionSpeech", code: 2, userInfo: [NSLocalizedDescriptionKey: "no compatible audio format"])
         }
-        let converter = AnalyzerInputConverter(analyzerFormat: analyzerFormat)
         let (stream, continuation) = AsyncStream.makeStream(of: AnalyzerInput.self)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
 
@@ -136,9 +142,22 @@ import Speech
             }
         }
 
-        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
-            guard let inputs = try? converter.convert(buffer, at: nil) else { return }
-            for i in inputs { continuation.yield(i) }
+        let converter: AVAudioConverter? = inputFormat.isEqual(analyzerFormat) ? nil
+            : AVAudioConverter(from: inputFormat, to: analyzerFormat)
+        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
+            if let converter = converter {
+                let ratio = analyzerFormat.sampleRate / inputFormat.sampleRate
+                let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio + 1)
+                guard let out = AVAudioPCMBuffer(pcmFormat: analyzerFormat, frameCapacity: capacity) else { return }
+                var err: NSError?
+                _ = converter.convert(to: out, error: &err) { _, status in
+                    status.pointee = .haveData
+                    return buffer
+                }
+                if err == nil { continuation.yield(AnalyzerInput(buffer: out)) }
+            } else {
+                continuation.yield(AnalyzerInput(buffer: buffer))
+            }
         }
         engine.prepare()
         try engine.start()

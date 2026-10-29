@@ -13,10 +13,15 @@ namespace Companion
         [Serializable]
         class Transcript
         {
+            // Agora ConvoAI RTM format: object = "assistant.transcription.turn", is_final
+            public string @object;
+            public bool is_final;
+            // Legacy / fallback field names
             public string type;
             public string role;
-            public string text;
             public bool final;
+            // Common
+            public string text;
         }
 
         readonly CompanionApi api;
@@ -29,8 +34,12 @@ namespace Companion
         public event Action<string> ReplyUpdated;
         public event Action<string> ReplyCompleted;
         public event Action<string> Error;
+        // Fires on main thread with normalized agent volume [0,1]; use to drive lip sync.
+        public event Action<float> AgentVoiceVolume;
 
         public bool IsConnected => joined && rtc != null && rtm != null && session != null;
+        public IRtcEngine Rtc => rtc;
+        public uint AgentUid => session?.agentUid ?? 0;
 
         public AgoraChatService(CompanionApi api) => this.api = api;
 
@@ -54,7 +63,7 @@ namespace Companion
             var result = rtc.JoinChannel(session.rtcToken, session.channel, session.uid, options);
             if (result != 0) throw new Exception("Agora RTC join failed: " + result);
 
-            var deadline = Time.realtimeSinceStartup + 10f;
+            var deadline = Time.realtimeSinceStartup + 30f;
             while (!joined && Time.realtimeSinceStartup < deadline) await Awaitable.NextFrameAsync();
             if (!joined) throw new TimeoutException("Agora RTC connection timed out");
         }
@@ -82,6 +91,7 @@ namespace Companion
             rtc.InitEventHandler(rtcEvents);
             rtc.EnableAudio();
             rtc.SetDefaultAudioRouteToSpeakerphone(true);
+            rtc.EnableAudioVolumeIndication(100, 3, true);
         }
 
         async Awaitable SetupRtmAsync()
@@ -111,11 +121,15 @@ namespace Companion
                 var json = messageEvent.message?.GetData<string>();
                 if (string.IsNullOrEmpty(json)) return;
                 var line = JsonUtility.FromJson<Transcript>(json);
-                if (line == null || line.type != "transcript") return;
-                if (line.role != "agent" && line.role != "assistant") return;
-                if (string.IsNullOrEmpty(line.text)) return;
+                if (line == null) return;
+
+                bool isAssistant =
+                    (!string.IsNullOrEmpty(line.@object) && line.@object.StartsWith("assistant.transcription"))
+                    || (line.type == "transcript" && (line.role == "agent" || line.role == "assistant"));
+                if (!isAssistant || string.IsNullOrEmpty(line.text)) return;
+
                 ReplyUpdated?.Invoke(line.text);
-                if (line.final) ReplyCompleted?.Invoke(line.text);
+                if (line.is_final || line.final) ReplyCompleted?.Invoke(line.text);
             }
             catch (Exception e)
             {
@@ -161,6 +175,15 @@ namespace Companion
             public RtcEvents(AgoraChatService owner) => this.owner = owner;
 
             public override void OnJoinChannelSuccess(RtcConnection connection, int elapsed) => owner.joined = true;
+
+            public override void OnAudioVolumeIndication(RtcConnection connection, AudioVolumeInfo[] speakers, uint speakerNumber, int totalVolume)
+            {
+                if (owner.session == null) return;
+                float vol = 0;
+                for (int i = 0; i < speakerNumber; i++)
+                    if (speakers[i].uid == owner.session.agentUid) { vol = speakers[i].volume / 255f; break; }
+                owner.AgentVoiceVolume?.Invoke(vol);
+            }
 
             public override void OnError(int err, string msg)
             {

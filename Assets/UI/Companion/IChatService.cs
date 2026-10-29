@@ -10,6 +10,8 @@ namespace Companion
         event Action<string> ReplyUpdated;
         event Action<string> ReplyCompleted;
         event Action<string> Error;
+        // Normalized agent speaking volume [0,1]; fires ~10 Hz. Used for lip sync.
+        event Action<float> AgentVoiceVolume;
 
         bool IsConnected { get; }
         Awaitable ConnectAsync(string language);

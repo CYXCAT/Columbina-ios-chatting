@@ -88,12 +88,25 @@ namespace Companion
 
         async Awaitable Connect()
         {
-            try { await Chat.ConnectAsync(L.Code); }
+            try
+            {
+                await Chat.ConnectAsync(L.Code);
+                WireAgentLipSync();
+            }
             catch (Exception e)
             {
                 Debug.LogException(e);
                 Notice?.Invoke("toast.offline");
             }
+        }
+
+        void WireAgentLipSync()
+        {
+            if (Chat is not AgoraChatService agora) return;
+            if (lipSync?.LipSync == null) return;
+            var bridge = gameObject.GetComponent<AgoraLipSyncBridge>()
+                ?? gameObject.AddComponent<AgoraLipSyncBridge>();
+            bridge.Attach(agora.Rtc, agora.AgentUid, lipSync.LipSync);
         }
 
         async void OnLanguageChanged()

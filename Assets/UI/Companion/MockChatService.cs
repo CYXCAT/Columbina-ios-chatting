@@ -51,6 +51,7 @@ namespace Companion
         public event Action<string> ReplyUpdated;
         public event Action<string> ReplyCompleted;
         public event Action<string> Error { add { } remove { } }
+        public event Action<float> AgentVoiceVolume { add { } remove { } }
 
         string language = "en";
         int turn, generation;
