@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3cf94c3775d9a6648852a24e8806e43f, type: 3}
   m_Name: CompanionConfig
   m_EditorClassIdentifier: Assembly-CSharp::Companion.CompanionConfig
-  apiBaseUrl: http://localhost:3000
-  googleIosClientId: 
-  googleServerClientId: 
+  apiBaseUrl: https://companion-backend-gamma.vercel.app
+  googleIosClientId: 1095128064593-ipltg1tkkg9n7j892bfh6kv92j4eics2.apps.googleusercontent.com
+  googleServerClientId: 1095128064593-689b9pfrhvma9hk0kqn92kdrfcufvjlh.apps.googleusercontent.com

@@ -7,7 +7,18 @@ namespace Companion
 {
     [Serializable] public class ApiUser { public string id; public string name; public string language; }
     [Serializable] public class AuthResponse { public string accessToken; public string refreshToken; public int expiresIn; public ApiUser user; }
-    [Serializable] public class LiveKitTokenResponse { public string serverUrl; public string token; public string roomName; }
+    [Serializable] public class AgoraSessionResponse
+    {
+        public string appId;
+        public string channel;
+        public uint uid;
+        public uint agentUid;
+        public string agentId;
+        public string rtcToken;
+        public string rtmToken;
+        public long expiresAt;
+        public string sessionToken;
+    }
 
     public class ApiException : Exception
     {
@@ -32,6 +43,8 @@ namespace Companion
         [Serializable] class IdTokenBody { public string idToken; public string nonce; public string name; }
         [Serializable] class RefreshBody { public string refreshToken; }
         [Serializable] class LanguageBody { public string language; }
+        [Serializable] class AgoraMessageBody { public string sessionToken; public string text; }
+        [Serializable] class AgoraStopBody { public string sessionToken; }
 
         public Awaitable SignInDevAsync(string name) => Authenticate("/api/auth/dev", new DevLoginBody { name = name });
 
@@ -67,7 +80,14 @@ namespace Companion
         }
 
         // ---- app
-        public Awaitable<LiveKitTokenResponse> GetLiveKitTokenAsync() => Authorized<LiveKitTokenResponse>("POST", "/api/livekit/token", null);
+        public Awaitable<AgoraSessionResponse> StartAgoraSessionAsync() =>
+            Authorized<AgoraSessionResponse>("POST", "/api/agora/session", null);
+
+        public async Awaitable SendAgoraMessageAsync(string sessionToken, string text) =>
+            await Authorized<EmptyResponse>("POST", "/api/agora/message", new AgoraMessageBody { sessionToken = sessionToken, text = text });
+
+        public async Awaitable StopAgoraSessionAsync(string sessionToken) =>
+            await Authorized<EmptyResponse>("POST", "/api/agora/stop", new AgoraStopBody { sessionToken = sessionToken });
 
         public async Awaitable SetLanguageAsync(string language)
         {
@@ -84,6 +104,8 @@ namespace Companion
                 return await Send<T>(method, path, body, true);
             }
         }
+
+        [Serializable] class EmptyResponse { }
 
         async Awaitable<T> Send<T>(string method, string path, object body, bool authed)
         {

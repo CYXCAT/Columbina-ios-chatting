@@ -4,6 +4,7 @@
 
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <AuthenticationServices/AuthenticationServices.h>
 #import <UnityFramework/UnityFramework-Swift.h>
 #include "UnityInterface.h"
 #include "AppDelegateListener.h"

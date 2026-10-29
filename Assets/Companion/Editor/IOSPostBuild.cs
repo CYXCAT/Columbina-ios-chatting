@@ -8,8 +8,7 @@ using UnityEngine;
 namespace Companion.EditorTools
 {
     // Xcode project setup for the companion app: permissions, Sign in with Apple, the GoogleSignIn
-    // Swift package + its Info.plist keys, Swift plugins, and the frameworks/flags the LiveKit SDK requires.
-    // Runs before LiveKit's own link-order fix (999).
+    // Swift package + its Info.plist keys, Swift plugins, and native voice frameworks.
     public static class IOSPostBuild
     {
         const string GoogleSignInPackage = "https://github.com/google/GoogleSignIn-iOS.git";

@@ -74,8 +74,7 @@ namespace Companion
         {
             // A fresh install adopts the language stored on the account.
             if (!L.HasSavedPreference && api.User?.language == "zh") L.Current = Language.Chinese;
-            var chat = new LiveKitChatService(api, voiceOutput);
-            if (lipSync != null) chat.VoiceStreamStarted += lipSync.Attach;
+            var chat = new AgoraChatService(api);
             await UseChat(chat);
         }
 
