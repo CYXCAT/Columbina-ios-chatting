@@ -12,6 +12,7 @@ namespace Companion
         static NativeBridge instance;
 
         public static event Action<string> AuthResult;     // JSON: {"ok":true,"provider":"google","token":"...","name":"..."} or {"ok":false,"error":"..."}
+        public static event Action SpeechStarted;          // the user started talking
         public static event Action<string> SpeechPartial;  // interim transcript
         public static event Action<string> SpeechFinal;    // final transcript
         public static event Action<string> SpeechError;
@@ -22,6 +23,7 @@ namespace Companion
         {
             instance = null;
             AuthResult = null;
+            SpeechStarted = null;
             SpeechPartial = null;
             SpeechFinal = null;
             SpeechError = null;
@@ -36,6 +38,7 @@ namespace Companion
         }
 
         void OnAuthResult(string json) => AuthResult?.Invoke(json);
+        void OnSpeechStarted(string _) => SpeechStarted?.Invoke();
         void OnSpeechPartial(string text) => SpeechPartial?.Invoke(text);
         void OnSpeechFinal(string text) => SpeechFinal?.Invoke(text);
         void OnSpeechError(string message) => SpeechError?.Invoke(message);

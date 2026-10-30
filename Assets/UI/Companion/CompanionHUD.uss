@@ -320,10 +320,15 @@
     opacity: 1;
 }
 
-.voice-button--recording {
-    scale: 1.12 1.12;
+/* A conversation is on: the button breathes until it is tapped again. */
+.voice-button--active {
     border-color: rgb(255, 143, 192);
     background-color: rgb(255, 214, 232);
+    transition-duration: 0.6s;
+}
+
+.voice-button--pulse {
+    scale: 1.08 1.08;
 }
 
 /* ---------- settings modal ---------- */

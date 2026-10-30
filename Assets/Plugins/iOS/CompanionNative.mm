@@ -1,5 +1,5 @@
 // C entry points for Companion's DllImport("__Internal") declarations, forwarding to the Swift
-// implementations (CompanionSpeech.swift, CompanionAuth.swift) and back to Unity through
+// implementations (CompanionVoice.swift, CompanionAuth.swift) and back to Unity through
 // UnitySendMessage on the "CompanionNative" GameObject (Companion.NativeBridge).
 
 #import <Foundation/Foundation.h>
@@ -33,7 +33,8 @@ extern "C" {
 // ---- speech
 void _CompanionSpeechStart(const char* locale)
 {
-    [CompanionSpeech.shared startWithLocale:Str(locale)
+    [CompanionVoice.shared startWithLocale:Str(locale)
+        onSpeechStart:^{ Send("OnSpeechStarted", @""); }
         onPartial:^(NSString* t) { Send("OnSpeechPartial", t); }
         onFinal:^(NSString* t) { Send("OnSpeechFinal", t); }
         onError:^(NSString* m) { Send("OnSpeechError", m); }];
@@ -41,7 +42,28 @@ void _CompanionSpeechStart(const char* locale)
 
 void _CompanionSpeechStop(void)
 {
-    [CompanionSpeech.shared stop];
+    [CompanionVoice.shared stop];
+}
+
+void _CompanionSpeechDiscard(void)
+{
+    [CompanionVoice.shared discardUtterance];
+}
+
+// ---- voice playback (16-bit LE mono PCM)
+void _CompanionVoicePlay(const unsigned char* pcm, int length, int sampleRate)
+{
+    [CompanionVoice.shared playWithPcm:[NSData dataWithBytes:pcm length:length] sampleRate:sampleRate];
+}
+
+void _CompanionVoiceStopPlayback(void)
+{
+    [CompanionVoice.shared stopPlayback];
+}
+
+long long _CompanionVoicePlayedSamples(void)
+{
+    return [CompanionVoice.shared playedSamples];
 }
 
 // ---- auth

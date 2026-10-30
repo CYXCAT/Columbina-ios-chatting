@@ -10,6 +10,10 @@ namespace Companion
         [SerializeField] CompanionMotion motion;
         [SerializeField] float dialogueHideDelay = 12f;
         [SerializeField] float replyTimeout = 20f;
+        [Tooltip("Her voice can still turn up in the transcript this long after she stops talking.")]
+        [SerializeField] float echoWindow = 3f;
+        [Tooltip("An echo-like transcript this long is certainly her voice: drop it and listen afresh.")]
+        [SerializeField] int echoDiscardTokens = 4;
 
         IChatService chat;
         ISpeechRecognizer speech;
@@ -17,9 +21,9 @@ namespace Companion
         Label userLine, replyName, replyText, toast;
         TextField input;
         Button sendButton, voiceButton, languageEnglish, languageChinese;
-        IVisualElementScheduledItem dots, hideDialogue, hideToast, timeout;
-        bool waiting, recording;
-        int voicePointer;
+        IVisualElementScheduledItem dots, hideDialogue, hideToast, timeout, pulse;
+        bool waiting, conversing, userTurn;
+        float lastAgentVoice = float.NegativeInfinity;
 
         void Awake()
         {
@@ -48,9 +52,7 @@ namespace Companion
             input.RegisterValueChangedCallback(_ => { RefreshSendButton(); NotifyActivity(); });
             input.RegisterCallback<KeyDownEvent>(OnInputKey, TrickleDown.TrickleDown);
 
-            voiceButton.RegisterCallback<PointerDownEvent>(OnVoiceDown, TrickleDown.TrickleDown);
-            voiceButton.RegisterCallback<PointerUpEvent>(_ => StopRecording(), TrickleDown.TrickleDown);
-            voiceButton.RegisterCallback<PointerCaptureOutEvent>(_ => StopRecording());
+            voiceButton.clicked += ToggleConversation;
 
             root.Q<Button>("menuButton").clicked += () => SetMenu(!root.ClassListContains("hud--menu-open"));
             root.Q("scrim").RegisterCallback<PointerDownEvent>(_ => SetMenu(false));
@@ -68,6 +70,7 @@ namespace Companion
             root.Q<Button>("signinGoogle").clicked += () => SignIn(SignInProvider.Google);
 
             L.LanguageChanged += OnLanguageChanged;
+            speech.SpeechStarted += OnSpeechStarted;
             speech.Partial += OnSpeechPartial;
             speech.Final += OnSpeechFinal;
             speech.Failed += OnSpeechFailed;
@@ -83,8 +86,9 @@ namespace Companion
 
         void OnDisable()
         {
-            StopRecording();
+            EndConversation();
             L.LanguageChanged -= OnLanguageChanged;
+            speech.SpeechStarted -= OnSpeechStarted;
             speech.Partial -= OnSpeechPartial;
             speech.Final -= OnSpeechFinal;
             speech.Failed -= OnSpeechFailed;
@@ -101,7 +105,7 @@ namespace Companion
 
         void OnApplicationPause(bool pause)
         {
-            if (pause) StopRecording();
+            if (pause) EndConversation();
         }
 
         // ---------- chat ----------
@@ -113,6 +117,7 @@ namespace Companion
                 chat.ReplyUpdated -= OnReplyUpdated;
                 chat.ReplyCompleted -= OnReplyCompleted;
                 chat.Error -= OnChatError;
+                chat.AgentVoiceVolume -= OnAgentVoice;
             }
             chat = service;
             if (chat != null)
@@ -120,6 +125,7 @@ namespace Companion
                 chat.ReplyUpdated += OnReplyUpdated;
                 chat.ReplyCompleted += OnReplyCompleted;
                 chat.Error += OnChatError;
+                chat.AgentVoiceVolume += OnAgentVoice;
             }
         }
 
@@ -223,6 +229,7 @@ namespace Companion
 
         void OpenInput()
         {
+            EndConversation();
             NotifyActivity();
             root.AddToClassList("hud--typing");
             input.schedule.Execute(() => input.Focus()).StartingIn(50);
@@ -250,51 +257,115 @@ namespace Companion
         void RefreshSendButton() =>
             sendButton.EnableInClassList("send-button--idle", waiting || string.IsNullOrWhiteSpace(input.value));
 
-        // ---------- voice (push-to-talk) ----------
+        // ---------- voice conversation ----------
+        // Tap to start: she listens continuously, every pause in the user's speech ends a turn, and
+        // talking over her interrupts her. Tap again to stop.
 
-        void OnVoiceDown(PointerDownEvent e)
+        void ToggleConversation()
+        {
+            if (conversing) EndConversation();
+            else StartConversation();
+        }
+
+        void StartConversation()
         {
             if (!speech.IsAvailable)
             {
                 ShowToast(L.Get("toast.voiceUnavailable"));
                 return;
             }
-            // Talking interrupts her, whether she is still thinking or already speaking.
+            NotifyActivity();
             chat?.Cancel();
             SetWaiting(false);
-            reply.RemoveFromClassList("reply--visible");
-            voicePointer = e.pointerId;
-            voiceButton.CapturePointer(voicePointer);
-            recording = true;
-            NotifyActivity();
-            voiceButton.AddToClassList("voice-button--recording");
-            hideDialogue?.Pause();
-            userLine.text = "…";
-            userLine.AddToClassList("user-line--visible");
+            HideDialogue();
+            conversing = true;
+            voiceButton.AddToClassList("voice-button--active");
+            pulse = voiceButton.schedule.Execute(() => voiceButton.ToggleInClassList("voice-button--pulse")).Every(700);
+            ShowToast(L.Get("voice.listening"));
             speech.Start(L.SpeechLocale);
         }
 
-        void StopRecording()
+        void EndConversation()
         {
-            if (!recording) return;
-            recording = false;
-            voiceButton.RemoveFromClassList("voice-button--recording");
-            if (voiceButton.HasPointerCapture(voicePointer)) voiceButton.ReleasePointer(voicePointer);
+            if (!conversing) return;
+            conversing = false;
+            userTurn = false;
+            pulse?.Pause();
+            voiceButton.RemoveFromClassList("voice-button--active");
+            voiceButton.RemoveFromClassList("voice-button--pulse");
             speech.Stop();
+            chat?.Cancel();
+            SetWaiting(false);
+            HideDialogue();
         }
 
-        void OnSpeechPartial(string text) => userLine.text = text;
+        void OnAgentVoice(float level)
+        {
+            if (level > 0.02f) lastAgentVoice = Time.time;
+        }
+
+        // The echo canceller doesn't remove all of her voice from the microphone, so while she talks
+        // (and just after) a transcript only counts as the user once it differs from what she says.
+        bool HerVoiceMayBeInMic => Time.time - lastAgentVoice < echoWindow;
+
+        bool IsEcho(string heard, out int tokens)
+        {
+            tokens = 0;
+            return HerVoiceMayBeInMic && EchoFilter.IsEcho(heard, replyText.text, out tokens);
+        }
+
+        void OnSpeechStarted()
+        {
+            if (conversing && !HerVoiceMayBeInMic) BeginUserTurn();
+        }
+
+        // The user is talking: interrupt her, whether she is still thinking or already speaking.
+        void BeginUserTurn()
+        {
+            userTurn = true;
+            NotifyActivity();
+            chat?.Cancel();
+            SetWaiting(false);
+            hideDialogue?.Pause();
+            reply.RemoveFromClassList("reply--visible");
+            userLine.text = "…";
+            userLine.AddToClassList("user-line--visible");
+        }
+
+        void OnSpeechPartial(string text)
+        {
+            if (!conversing) return;
+            if (!userTurn)
+            {
+                if (IsEcho(text, out int tokens))
+                {
+                    if (tokens >= echoDiscardTokens) speech.Discard();
+                    return;
+                }
+                BeginUserTurn();
+            }
+            userLine.text = text;
+        }
 
         void OnSpeechFinal(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) userLine.RemoveFromClassList("user-line--visible");
-            else Submit(text.Trim());
+            if (!conversing) return;
+            bool turn = userTurn;
+            userTurn = false;
+            if (string.IsNullOrWhiteSpace(text) || (!turn && IsEcho(text, out _)))
+            {
+                if (turn) userLine.RemoveFromClassList("user-line--visible");
+                return;
+            }
+            if (!turn) BeginUserTurn();
+            Submit(text.Trim());
         }
 
         void OnSpeechFailed(string message)
         {
             Debug.LogWarning("Speech recognition: " + message);
-            userLine.RemoveFromClassList("user-line--visible");
+            if (!conversing) return;
+            EndConversation();
             ShowToast(L.Get(message == "permission denied" ? "toast.voicePermission" : "toast.voiceFailed"));
         }
 
@@ -331,6 +402,7 @@ namespace Companion
 
         void OnLanguageChanged()
         {
+            EndConversation();
             SetWaiting(false);
             HideDialogue();
             Localize();
