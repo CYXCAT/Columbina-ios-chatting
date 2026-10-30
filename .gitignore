@@ -42,3 +42,9 @@ Thumbs.db
 # Character model, textures, materials and prefab (distributed separately)
 /Assets/Characters/
 /Assets/Characters.meta
+
+# Allsky: only the six-face textures are used (Resources/Sky); the equirect sources are huge
+/Assets/Allsky/**/*.png
+/Assets/Allsky/**/*.png.meta
+!/Assets/Allsky/**/*Cam_*.png
+!/Assets/Allsky/**/*Cam_*.png.meta
