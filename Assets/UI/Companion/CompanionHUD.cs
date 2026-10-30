@@ -274,6 +274,7 @@ namespace Companion
                 ShowToast(L.Get("toast.voiceUnavailable"));
                 return;
             }
+            if (motion != null) motion.AllowSinging = false;
             NotifyActivity();
             chat?.Cancel();
             SetWaiting(false);
@@ -290,6 +291,7 @@ namespace Companion
             if (!conversing) return;
             conversing = false;
             userTurn = false;
+            if (motion != null) motion.AllowSinging = true;
             pulse?.Pause();
             voiceButton.RemoveFromClassList("voice-button--active");
             voiceButton.RemoveFromClassList("voice-button--pulse");

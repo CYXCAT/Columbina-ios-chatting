@@ -82,11 +82,7 @@ namespace Companion
             var player = voiceOutput.GetComponent<StreamingVoicePlayer>();
             if (player != null) return player;
             player = voiceOutput.gameObject.AddComponent<StreamingVoicePlayer>();
-            if (lipSync == null) return player;
-            // On iOS the voice is played natively and the player feeds uLipSync itself; elsewhere
-            // uLipSync's proxy listens to the AudioSource and must come after the player.
-            if (StreamingVoicePlayer.PlaysNatively) player.LipSync = lipSync.LipSync;
-            else lipSync.Attach(voiceOutput);
+            if (lipSync != null) lipSync.Attach(player);
             return player;
         }
 
